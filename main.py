@@ -5,7 +5,7 @@
 import os
 import json
 import openai
-from libs.descriptions import function_description
+from libs.descriptions import function_descriptions
 
 # --------------------------------------------------------
 # Load Open AI API Key
@@ -14,7 +14,7 @@ from libs.descriptions import function_description
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
 # --------------------------------------------------------
-# Run
+# Setup
 # --------------------------------------------------------
 
 
@@ -34,15 +34,63 @@ completion = openai.ChatCompletion.create(
     model="gpt-3.5-turbo",
     max_tokens=500,
     messages=messages,
-    functions = function_description,
+    functions = function_descriptions,
     function_call = {"name": "create_encounter"},
     temperature = 0.2
 )
-messages.append(completion.choices[0].message)
+reply = completion.choices[0].message.function_call.arguments
+reply = json.loads(reply)
 
-print(completion)
+scene_text = reply["scene_text"]
 
-print(completion.choices[0].message)
-print(" ")
-print(" ")
-print(" ")
+# --------------------------------------------------------
+# Main Game Loop
+# --------------------------------------------------------
+
+while(True):
+
+    print(scene_text)
+    messages.append({"role": "assistant", "content": scene_text})
+
+    for i in range(len(reply["choices"])):
+        choice = reply["choices"]["choice"+str(i+1)]
+        print(str(i+1)+'.', choice["choice_text"], '['+choice["choice_type"]+']')
+
+    player_choice = input('> ')
+
+    choice_text = reply["choices"]["choice"+player_choice]["choice_text"]
+    choice_type = reply["choices"]["choice"+player_choice]["choice_type"]
+
+    messages.append({"role": "user", "content": choice_text})
+
+    if choice_type == 'combat':
+        completion = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            max_tokens=800,
+            messages=messages,
+            functions = function_descriptions,
+            function_call = {"name": "create_enemy"},
+            temperature = 0.2
+        )
+        reply = completion.choices[0].message.function_call.arguments
+        reply = json.loads(reply)
+
+        print("fighting > ")
+        print('name >', reply['name'])
+        print('diffuclty >', reply['difficulty'])
+        print('abilities >', reply['abilities'])
+
+        break
+    else:
+        completion = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            max_tokens=800,
+            messages=messages,
+            functions = function_descriptions,
+            function_call = {"name": "create_encounter"},
+            temperature = 0.2
+        )
+
+    reply = completion.choices[0].message.function_call.arguments
+    reply = json.loads(reply)
+    scene_text = reply["scene_text"]
